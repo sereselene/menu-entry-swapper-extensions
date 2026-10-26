@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root="$(git rev-parse --show-toplevel)"
+title="$(grep -v '^#' "$1" | sed -n '/[^[:space:]]/{p;q;}' || true)"
+title="${title%$'\r'}"
+
+case "$title" in
+    "fixup! "* | "squash! "* | "amend! "*)
+        exit 0
+        ;;
+esac
+
+if problems="$(bash "$repository_root/scripts/commit-format.sh" "$title")"; then
+    exit 0
+fi
+
+{
+    echo "commit-msg: the commit title doesn't match type(scope): description."
+    echo "  Title: $title"
+    while IFS= read -r problem; do
+        echo "  * $problem"
+    done <<<"$problems"
+    echo "  Example: feat(packs): add the clue scroll pack"
+} >&2
+exit 1

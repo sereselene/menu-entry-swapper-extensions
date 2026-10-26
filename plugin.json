@@ -1,0 +1,10 @@
+{
+  "name": "menu-entry-swapper-extensions",
+  "version": "0.1.0",
+  "hasSettingsIcon": true,
+  "requiredDependencies": {
+    "prettyui": 6398181,
+    "menu-entry-swapper": 6402302
+  },
+  "optionalDependencies": {}
+}

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repository_root="$(git rev-parse --show-toplevel)"
+cd "$repository_root"
+source scripts/tools.sh
+
+staged=()
+while IFS= read -r -d '' file; do
+    staged+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.lua')
+
+if [ "${#staged[@]}" -eq 0 ]; then
+    exit 0
+fi
+
+stylua="$(tool_path stylua)"
+luacheck="$(tool_path luacheck)"
+if [ -z "$stylua" ] || [ -z "$luacheck" ]; then
+    echo "pre-commit: StyLua or Luacheck isn't installed. Run bash scripts/setup.sh first." >&2
+    exit 1
+fi
+
+failed=false
+for file in "${staged[@]}"; do
+    if ! formatting="$(git show ":$file" | "$stylua" --config-path stylua.toml --stdin-filepath "$file" --check - 2>&1)"; then
+        echo "pre-commit: $file isn't formatted. Run stylua \"$file\" and stage it again." >&2
+        printf '%s\n' "$formatting" >&2
+        failed=true
+    fi
+    if ! lint="$(git show ":$file" | "$luacheck" --no-color --formatter plain --codes --filename "$file" - 2>&1)"; then
+        echo "pre-commit: Luacheck found problems in $file." >&2
+        printf '%s\n' "$lint" >&2
+        failed=true
+    fi
+done
+
+if [ "$failed" = true ]; then
+    exit 1
+fi

@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+    branches:
+      - main
+      - release/**
+      - hotfix/**
+  push:
+    branches:
+      - main
+      - release/**
+      - hotfix/**
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BUSTED_VERSION: "2.3.0"
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned tools
+        run: |
+          bash scripts/setup.sh --tools-only
+          echo "$GITHUB_WORKSPACE/.tools/bin" >> "$GITHUB_PATH"
+
+      - name: Check formatting
+        run: |
+          stylua --version
+          stylua --check .
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Install the pinned tools
+        run: |
+          bash scripts/setup.sh --tools-only
+          echo "$GITHUB_WORKSPACE/.tools/bin" >> "$GITHUB_PATH"
+
+      - name: Run Luacheck
+        run: |
+          luacheck --version
+          luacheck --no-color .
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Install Lua and LuaRocks
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes lua5.4 liblua5.4-dev luarocks
+
+      - name: Restore the cached Busted install
+        id: busted-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: ~/.luarocks
+          key: ${{ runner.os }}-${{ runner.arch }}-lua5.4-busted-${{ env.BUSTED_VERSION }}
+
+      - name: Install Busted
+        if: steps.busted-cache.outputs.cache-hit != 'true'
+        run: luarocks --lua-version 5.4 install --local busted "$BUSTED_VERSION"
+
+      - name: Put LuaRocks tools on the path
+        run: echo "$HOME/.luarocks/bin" >> "$GITHUB_PATH"
+
+      - name: Run Busted
+        run: busted --output=plainTerminal

@@ -1,0 +1,59 @@
+name: Pull request title
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+    branches:
+      - main
+      - release/**
+      - hotfix/**
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  title:
+    name: PR title
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+
+    steps:
+      - name: Check out the title rules
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+
+      - name: Check the title format
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if problems="$(bash scripts/commit-format.sh "$TITLE")"; then
+            echo "The title follows type(scope): description."
+            exit 0
+          fi
+
+          {
+            echo "### PR title check failed"
+            echo ""
+            echo "Title: \`$TITLE\`"
+            echo ""
+            while IFS= read -r problem; do
+              echo "* $problem"
+            done <<< "$problems"
+            echo ""
+            echo "Expected \`type(scope): description\`, for example \`fix(swapper): keep pack rules after a reload\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          while IFS= read -r problem; do
+            echo "::error title=PR title::$problem"
+          done <<< "$problems"
+          exit 1
